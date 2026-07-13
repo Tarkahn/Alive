@@ -25,6 +25,21 @@ uvicorn backend.main:app --reload
 
 Then open http://localhost:8000 in your browser.
 
+## Deploying to Render
+
+This repo includes a `render.yaml` blueprint, so Render can pick up the
+build/start commands automatically:
+
+1. Log into [Render](https://dashboard.render.com) and click **New +** →
+   **Blueprint**.
+2. Connect the `tarkahn/alive` GitHub repo. Render will detect
+   `render.yaml` and configure the service for you.
+3. Click **Apply** to deploy. Render assigns a public `https://...onrender.com`
+   URL — that's reachable from your iPhone (or anywhere), no LAN required.
+
+The free plan spins the service down after periods of inactivity, so the
+first request after a while can take ~30s to wake it back up.
+
 ## Project layout
 
 ```
