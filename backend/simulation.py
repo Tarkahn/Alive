@@ -51,7 +51,7 @@ class Creature:
 
 
 class World:
-    def __init__(self, width=800, height=600, num_creatures=30):
+    def __init__(self, width=800, height=600, num_creatures=1):
         self.width = width
         self.height = height
         self.creatures = [
