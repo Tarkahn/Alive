@@ -98,6 +98,25 @@ def _overlaps_wall(x, y, radius, walls):
 BODY_LENGTH = 20
 BODY_WIDTH = 12
 HEAD_RADIUS = 5
+LEG_LENGTH = 9
+LEG_SWING = 4
+LEG_CYCLE_RATE = 10  # radians/sec of gait phase while moving
+SPEED = 55  # pixels/sec
+STOP_DISTANCE = 3
+
+# (along-body sign, side sign, gait phase offset) - diagonal pairs move together,
+# like a quadruped trot.
+LEG_LAYOUT = [
+    (1, 1, 0),
+    (1, -1, math.pi),
+    (-1, 1, math.pi),
+    (-1, -1, 0),
+]
+
+
+def _rotate(px, py, angle):
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    return px * cos_a - py * sin_a, px * sin_a + py * cos_a
 
 
 class Creature:
@@ -110,9 +129,55 @@ class Creature:
         self.body_width = BODY_WIDTH
         self.head_radius = HEAD_RADIUS
         self.color = random.choice(COLORS)
+        self.target = None
+        self.moving = False
+        self.leg_phase = 0.0
 
     def bounding_radius(self):
         return self.body_length / 2 + self.head_radius * 2
+
+    def set_target(self, x, y):
+        self.target = (x, y)
+
+    def step(self, dt):
+        if self.target is None:
+            self.moving = False
+            return
+
+        dx = self.target[0] - self.x
+        dy = self.target[1] - self.y
+        distance = math.hypot(dx, dy)
+
+        if distance <= STOP_DISTANCE:
+            self.target = None
+            self.moving = False
+            return
+
+        self.moving = True
+        self.heading = math.atan2(dy, dx)
+        travel = min(SPEED * dt, distance)
+        self.x += math.cos(self.heading) * travel
+        self.y += math.sin(self.heading) * travel
+        self.leg_phase += dt * LEG_CYCLE_RATE
+
+    def _legs(self):
+        legs = []
+        for along_sign, side_sign, phase_offset in LEG_LAYOUT:
+            base_local = (along_sign * self.body_length * 0.25, side_sign * self.body_width / 2)
+            swing = LEG_SWING * math.sin(self.leg_phase + phase_offset) if self.moving else 0
+            foot_local = (base_local[0] + swing, base_local[1] + side_sign * LEG_LENGTH)
+
+            bx, by = _rotate(*base_local, self.heading)
+            fx, fy = _rotate(*foot_local, self.heading)
+            legs.append(
+                {
+                    "x1": round(self.x + bx, 2),
+                    "y1": round(self.y + by, 2),
+                    "x2": round(self.x + fx, 2),
+                    "y2": round(self.y + fy, 2),
+                }
+            )
+        return legs
 
     def to_dict(self):
         head_offset = self.body_length / 2
@@ -128,6 +193,7 @@ class Creature:
             "head_x": round(head_x, 2),
             "head_y": round(head_y, 2),
             "head_radius": self.head_radius,
+            "legs": self._legs(),
             "color": self.color,
         }
 
@@ -149,6 +215,17 @@ class World:
             if not _overlaps_wall(x, y, probe_radius, self.walls):
                 return Creature(x, y)
         return Creature(self.width / 2, self.height / 2)
+
+    def step(self, dt):
+        for creature in self.creatures:
+            creature.step(dt)
+
+    def set_target(self, x, y):
+        if not self.creatures:
+            return
+        x = max(0, min(self.width, x))
+        y = max(0, min(self.height, y))
+        self.creatures[0].set_target(x, y)
 
     def to_dict(self):
         return {

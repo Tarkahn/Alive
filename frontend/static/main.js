@@ -2,11 +2,14 @@ const canvas = document.getElementById("world");
 const ctx = canvas.getContext("2d");
 const statusEl = document.getElementById("status");
 
+let socket = null;
+
 function connect() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
   ws.onopen = () => {
+    socket = ws;
     statusEl.textContent = "connected";
   };
 
@@ -16,12 +19,21 @@ function connect() {
   };
 
   ws.onclose = () => {
+    socket = null;
     statusEl.textContent = "disconnected, retrying...";
     setTimeout(connect, 1000);
   };
 
   ws.onerror = () => ws.close();
 }
+
+canvas.addEventListener("click", (event) => {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+  socket.send(JSON.stringify({ type: "move_to", x, y }));
+});
 
 function render(world) {
   if (canvas.width !== world.width || canvas.height !== world.height) {
@@ -39,6 +51,15 @@ function render(world) {
   }
 
   for (const creature of world.creatures) {
+    ctx.strokeStyle = creature.color;
+    ctx.lineWidth = 2;
+    for (const leg of creature.legs) {
+      ctx.beginPath();
+      ctx.moveTo(leg.x1, leg.y1);
+      ctx.lineTo(leg.x2, leg.y2);
+      ctx.stroke();
+    }
+
     ctx.fillStyle = creature.color;
 
     ctx.save();
