@@ -9,10 +9,106 @@ body {
   align-items: center;
 }
 
-canvas {
+#layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+canvas#world {
   background: #1c1f2b;
   border: 1px solid #333a4d;
   border-radius: 4px;
+  max-width: 100%;
+}
+
+#panel {
+  width: 240px;
+  background: #171a24;
+  border: 1px solid #333a4d;
+  border-radius: 4px;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.panel-section {
+  margin-bottom: 1rem;
+}
+
+.panel-section h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a91a8;
+  margin: 0 0 0.4rem;
+}
+
+.panel-section label {
+  display: block;
+  margin-bottom: 0.3rem;
+  cursor: pointer;
+}
+
+#brain-status {
+  color: #8a91a8;
+  margin-bottom: 0.4rem;
+}
+
+#brain-status.online {
+  color: #2ecc71;
+}
+
+.meter-label {
+  color: #8a91a8;
+  margin-bottom: 0.2rem;
+}
+
+.meter {
+  height: 10px;
+  background: #262b3b;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+#anomaly-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2ecc71, #f1c40f, #e74c3c);
+  transition: width 0.1s linear;
+}
+
+canvas#anomaly-spark {
+  background: #12141c;
+  border-radius: 3px;
+  width: 100%;
+}
+
+#vision-bars {
+  display: flex;
+  gap: 2px;
+  height: 40px;
+  align-items: flex-end;
+  margin-bottom: 0.4rem;
+}
+
+#vision-bars .vbar {
+  flex: 1;
+  background: #3498db;
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+#touch-indicator span.on {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+#proprio {
+  color: #8a91a8;
+  white-space: pre-line;
 }
 
 #status {

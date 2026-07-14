@@ -6,6 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import brain
 from .simulation import World
 
 TICK_RATE_HZ = 30
@@ -15,6 +16,7 @@ app = FastAPI(title="Alive")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 world = World()
+cortex = brain.build(world) if brain.available else None
 connections: set[WebSocket] = set()
 
 
@@ -27,7 +29,7 @@ async def index():
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     connections.add(websocket)
-    await websocket.send_text(json.dumps(world.to_dict()))
+    await websocket.send_text(json.dumps(_payload()))
     try:
         while True:
             raw = await websocket.receive_text()
@@ -35,14 +37,23 @@ async def ws_endpoint(websocket: WebSocket):
                 message = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            if message.get("type") == "move_to":
+            kind = message.get("type")
+            if kind == "move_to":
                 x, y = message.get("x"), message.get("y")
                 if isinstance(x, (int, float)) and isinstance(y, (int, float)):
                     world.set_target(x, y)
+            elif kind == "set_mode":
+                world.set_mode(message.get("mode"))
     except WebSocketDisconnect:
         pass
     finally:
         connections.discard(websocket)
+
+
+def _payload():
+    data = world.to_dict()
+    data["brain"] = cortex.state_dict() if cortex else {"available": False}
+    return data
 
 
 async def simulation_loop():
@@ -50,9 +61,11 @@ async def simulation_loop():
     while True:
         await asyncio.sleep(dt)
         world.step(dt)
+        if cortex:
+            cortex.step(world.creatures[0])
         if not connections:
             continue
-        payload = json.dumps(world.to_dict())
+        payload = json.dumps(_payload())
         stale = []
         for ws in connections:
             try:

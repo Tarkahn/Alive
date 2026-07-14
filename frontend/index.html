@@ -2,12 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Alive</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <h1>Alive</h1>
-  <canvas id="world"></canvas>
+  <div id="layout">
+    <canvas id="world"></canvas>
+    <aside id="panel">
+      <div class="panel-section">
+        <label><input type="checkbox" id="overlay-toggle" checked /> sensor overlay</label>
+        <label><input type="checkbox" id="wander-toggle" /> autonomous wander</label>
+      </div>
+      <div class="panel-section">
+        <h2>Brain</h2>
+        <div id="brain-status">offline</div>
+        <div class="meter-label">surprise <span id="anomaly-value">–</span></div>
+        <div class="meter"><div id="anomaly-bar"></div></div>
+        <canvas id="anomaly-spark" width="220" height="40"></canvas>
+      </div>
+      <div class="panel-section">
+        <h2>Senses</h2>
+        <div class="meter-label">vision (left → right)</div>
+        <div id="vision-bars"></div>
+        <div id="touch-indicator">touch: <span>no</span></div>
+        <div id="proprio"></div>
+      </div>
+    </aside>
+  </div>
   <p id="status">connecting...</p>
   <script src="/static/main.js"></script>
 </body>
