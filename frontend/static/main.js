@@ -39,9 +39,18 @@ function render(world) {
   }
 
   for (const creature of world.creatures) {
-    ctx.beginPath();
-    ctx.arc(creature.x, creature.y, creature.radius, 0, Math.PI * 2);
     ctx.fillStyle = creature.color;
+
+    ctx.save();
+    ctx.translate(creature.x, creature.y);
+    ctx.rotate(creature.heading);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, creature.body_length / 2, creature.body_width / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(creature.head_x, creature.head_y, creature.head_radius, 0, Math.PI * 2);
     ctx.fill();
   }
 }

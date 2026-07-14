@@ -1,3 +1,4 @@
+import math
 import random
 import uuid
 
@@ -94,20 +95,39 @@ def _overlaps_wall(x, y, radius, walls):
     return False
 
 
+BODY_LENGTH = 20
+BODY_WIDTH = 12
+HEAD_RADIUS = 5
+
+
 class Creature:
-    def __init__(self, x, y, radius=8):
+    def __init__(self, x, y, heading=None):
         self.id = uuid.uuid4().hex[:8]
         self.x = x
         self.y = y
-        self.radius = radius
+        self.heading = heading if heading is not None else random.uniform(0, 2 * math.pi)
+        self.body_length = BODY_LENGTH
+        self.body_width = BODY_WIDTH
+        self.head_radius = HEAD_RADIUS
         self.color = random.choice(COLORS)
 
+    def bounding_radius(self):
+        return self.body_length / 2 + self.head_radius * 2
+
     def to_dict(self):
+        head_offset = self.body_length / 2
+        head_x = self.x + math.cos(self.heading) * head_offset
+        head_y = self.y + math.sin(self.heading) * head_offset
         return {
             "id": self.id,
             "x": round(self.x, 2),
             "y": round(self.y, 2),
-            "radius": self.radius,
+            "heading": round(self.heading, 4),
+            "body_length": self.body_length,
+            "body_width": self.body_width,
+            "head_x": round(head_x, 2),
+            "head_y": round(head_y, 2),
+            "head_radius": self.head_radius,
             "color": self.color,
         }
 
@@ -119,15 +139,16 @@ class World:
         self.walls = _generate_floor_plan(width, height)
         self.creatures = [self._spawn_creature() for _ in range(num_creatures)]
 
-    def _spawn_creature(self, radius=8, max_attempts=50):
+    def _spawn_creature(self, max_attempts=50):
         jitter_x = self.width * 0.15
         jitter_y = self.height * 0.15
+        probe_radius = BODY_LENGTH / 2 + HEAD_RADIUS * 2
         for _ in range(max_attempts):
             x = self.width / 2 + random.uniform(-jitter_x, jitter_x)
             y = self.height / 2 + random.uniform(-jitter_y, jitter_y)
-            if not _overlaps_wall(x, y, radius, self.walls):
-                return Creature(x, y, radius)
-        return Creature(self.width / 2, self.height / 2, radius)
+            if not _overlaps_wall(x, y, probe_radius, self.walls):
+                return Creature(x, y)
+        return Creature(self.width / 2, self.height / 2)
 
     def to_dict(self):
         return {
