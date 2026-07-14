@@ -1,8 +1,19 @@
-import math
 import random
 import uuid
 
 COLORS = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6", "#1abc9c", "#e67e22"]
+
+
+def _generate_walls(width, height):
+    count = random.randint(6, 10)
+    walls = []
+    for _ in range(count):
+        w = random.randint(round(width * 0.08), round(width * 0.22))
+        h = random.randint(round(height * 0.08), round(height * 0.22))
+        x = random.uniform(0, width - w)
+        y = random.uniform(0, height - h)
+        walls.append({"x": round(x, 1), "y": round(y, 1), "w": w, "h": h})
+    return walls
 
 
 class Creature:
@@ -12,33 +23,6 @@ class Creature:
         self.y = y
         self.radius = radius
         self.color = random.choice(COLORS)
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(20, 60)  # pixels per second
-        self.vx = speed * math.cos(angle)
-        self.vy = speed * math.sin(angle)
-
-    def step(self, dt, width, height):
-        # Small random wander so movement doesn't look robotic.
-        if random.random() < 0.05:
-            self.vx += random.uniform(-15, 15)
-            self.vy += random.uniform(-15, 15)
-
-        self.x += self.vx * dt
-        self.y += self.vy * dt
-
-        if self.x - self.radius < 0:
-            self.x = self.radius
-            self.vx = abs(self.vx)
-        elif self.x + self.radius > width:
-            self.x = width - self.radius
-            self.vx = -abs(self.vx)
-
-        if self.y - self.radius < 0:
-            self.y = self.radius
-            self.vy = abs(self.vy)
-        elif self.y + self.radius > height:
-            self.y = height - self.radius
-            self.vy = -abs(self.vy)
 
     def to_dict(self):
         return {
@@ -54,18 +38,20 @@ class World:
     def __init__(self, width=800, height=600, num_creatures=1):
         self.width = width
         self.height = height
-        self.creatures = [
-            Creature(random.uniform(0, width), random.uniform(0, height))
-            for _ in range(num_creatures)
-        ]
+        self.walls = _generate_walls(width, height)
+        self.creatures = [self._spawn_creature() for _ in range(num_creatures)]
 
-    def step(self, dt):
-        for creature in self.creatures:
-            creature.step(dt, self.width, self.height)
+    def _spawn_creature(self):
+        jitter_x = self.width * 0.15
+        jitter_y = self.height * 0.15
+        x = self.width / 2 + random.uniform(-jitter_x, jitter_x)
+        y = self.height / 2 + random.uniform(-jitter_y, jitter_y)
+        return Creature(x, y)
 
     def to_dict(self):
         return {
             "width": self.width,
             "height": self.height,
+            "walls": self.walls,
             "creatures": [c.to_dict() for c in self.creatures],
         }

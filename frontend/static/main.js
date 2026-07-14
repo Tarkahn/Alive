@@ -30,6 +30,14 @@ function render(world) {
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (const wall of world.walls) {
+    ctx.fillStyle = "#2a2e3f";
+    ctx.strokeStyle = "#454b63";
+    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+    ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  }
+
   for (const creature of world.creatures) {
     ctx.beginPath();
     ctx.arc(creature.x, creature.y, creature.radius, 0, Math.PI * 2);
