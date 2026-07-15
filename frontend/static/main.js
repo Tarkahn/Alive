@@ -179,13 +179,26 @@ function updatePanel(world) {
     if (anomalyHistory.length > SPARK_POINTS) anomalyHistory.shift();
     drawSparkline();
   } else {
-    brainStatusEl.textContent = "offline (htm.core not installed)";
+    brainStatusEl.textContent = "offline — brain runs in local dev (see README)";
     brainStatusEl.className = "";
     anomalyValueEl.textContent = "–";
     anomalyBarEl.style.width = "0%";
+    drawOfflineSparkline();
   }
 
   wanderToggle.checked = world.mode === "wander";
+}
+
+function drawOfflineSparkline() {
+  const w = sparkCanvas.width;
+  const h = sparkCanvas.height;
+  sparkCtx.clearRect(0, 0, w, h);
+  sparkCtx.strokeStyle = "#3a4055";
+  sparkCtx.lineWidth = 1;
+  sparkCtx.beginPath();
+  sparkCtx.moveTo(0, h / 2);
+  sparkCtx.lineTo(w, h / 2);
+  sparkCtx.stroke();
 }
 
 function drawSparkline() {

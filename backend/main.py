@@ -12,8 +12,19 @@ from .simulation import World
 TICK_RATE_HZ = 30
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
+
+class NoCacheStaticFiles(StaticFiles):
+    """Browsers must revalidate static assets on every load - a stale cached
+    main.js next to a fresh index.html silently breaks the UI."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 app = FastAPI(title="Alive")
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 world = World()
 cortex = brain.build(world) if brain.available else None
@@ -22,7 +33,7 @@ connections: set[WebSocket] = set()
 
 @app.get("/")
 async def index():
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return FileResponse(FRONTEND_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.websocket("/ws")
