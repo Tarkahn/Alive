@@ -36,7 +36,21 @@ class Cortex:
         self.encoder = SensoryEncoder()
         self.num_rooms = num_rooms
 
-        self.sp = SpatialPooler(
+        self.sp = self._build_sp()
+        self.tm = self._build_tm()
+
+        self.classifier = Predictor(steps=[0], alpha=PREDICTOR_ALPHA) if num_rooms > 0 else None
+        self.classifier_samples = 0
+        self.room_belief = [0.0] * num_rooms
+
+        self.anomaly = 1.0
+        self.anomaly_avg = 1.0
+        self.ticks = 0
+        self._last_save = time.monotonic()
+        self._load_state()
+
+    def _build_sp(self):
+        return SpatialPooler(
             inputDimensions=[self.encoder.size],
             columnDimensions=[COLUMNS],
             potentialPct=0.85,
@@ -49,21 +63,13 @@ class Cortex:
             wrapAround=True,
             seed=1956,
         )
-        self.tm = TemporalMemory(
+
+    def _build_tm(self):
+        return TemporalMemory(
             columnDimensions=[COLUMNS],
             cellsPerColumn=CELLS_PER_COLUMN,
             seed=1960,
         )
-
-        self.classifier = Predictor(steps=[0], alpha=PREDICTOR_ALPHA) if num_rooms > 0 else None
-        self.classifier_samples = 0
-        self.room_belief = [0.0] * num_rooms
-
-        self.anomaly = 1.0
-        self.anomaly_avg = 1.0
-        self.ticks = 0
-        self._last_save = time.monotonic()
-        self._load_state()
 
     def step(self, creature, room=-1, learn=True):
         senses = creature.senses_dict()
@@ -135,8 +141,13 @@ class Cortex:
             try:
                 self.sp.loadFromFile(str(sp_path))
                 self.tm.loadFromFile(str(tm_path))
+                if self.sp.getNumInputs() != self.encoder.size:
+                    raise ValueError("saved brain was trained on a different sensory layout")
             except Exception:
-                pass  # stale/incompatible state; start fresh
+                # Stale or incompatible state (e.g. the encoder grew a new
+                # sense since the save): start fresh rather than crash later.
+                self.sp = self._build_sp()
+                self.tm = self._build_tm()
 
         meta_path = STATE_DIR / "meta.json"
         predictor_path = STATE_DIR / "predictor.bin"

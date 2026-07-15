@@ -13,6 +13,8 @@ const visionBarsEl = document.getElementById("vision-bars");
 const roomBarsEl = document.getElementById("room-bars");
 const kidnapBtn = document.getElementById("kidnap-btn");
 const touchEl = document.querySelector("#touch-indicator span");
+const energyValueEl = document.getElementById("energy-value");
+const energyBarEl = document.getElementById("energy-bar");
 const proprioEl = document.getElementById("proprio");
 
 let socket = null;
@@ -76,6 +78,20 @@ function render(world) {
     ctx.strokeStyle = "#454b63";
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+  }
+
+  for (const box of world.boxes || []) {
+    ctx.fillStyle = "#8a6d3b";
+    ctx.strokeStyle = "#b59460";
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+  }
+
+  for (const pellet of world.food || []) {
+    ctx.fillStyle = "#2ecc71";
+    ctx.beginPath();
+    ctx.arc(pellet.x, pellet.y, 4, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.font = "16px system-ui, sans-serif";
@@ -176,6 +192,12 @@ function updatePanel(world) {
 
   touchEl.textContent = senses.touch ? "YES" : "no";
   touchEl.className = senses.touch ? "on" : "";
+
+  const energy = senses.interoception ? senses.interoception.energy : null;
+  if (energy !== null) {
+    energyValueEl.textContent = energy.toFixed(2);
+    energyBarEl.style.width = `${Math.round(energy * 100)}%`;
+  }
 
   const p = senses.proprioception;
   proprioEl.textContent =

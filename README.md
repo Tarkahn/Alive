@@ -15,6 +15,10 @@ See `ROADMAP.md` for where this is headed.
 - **World** (`backend/simulation.py`): BSP-generated floor plan (fixed by
   `WORLD_SEED`, default 42, so the map survives restarts — you can't learn a
   map that changes under you). Creature physics, collision, raycast vision.
+  Pushable boxes the creature can shove around with its body (they occlude
+  vision like walls do — it sees surfaces, not categories). Food pellets and
+  an energy drive: energy drains with time and movement, hunger weakens the
+  body, eating restores it, and the energy level is sensed as interoception.
 - **Brain** (`backend/brain/`): sensory encoders → SDRs → Spatial Pooler →
   Temporal Memory (htm.core). Outputs: an anomaly score per tick — how
   *surprised* the creature is by what it senses (familiar places become

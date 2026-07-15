@@ -170,6 +170,13 @@ canvas#anomaly-spark {
   min-height: 2px;
 }
 
+#energy-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #e74c3c, #f1c40f, #2ecc71);
+  transition: width 0.1s linear;
+}
+
 #touch-indicator span.on {
   color: #e74c3c;
   font-weight: bold;

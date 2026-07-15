@@ -27,6 +27,17 @@ NUM_VISION_RAYS = 9
 VISION_ARC = math.radians(120)
 VISION_RANGE = 250.0
 
+BOX_SIZE = 22
+NUM_BOXES = 3
+
+NUM_FOOD = 3
+FOOD_RADIUS = 5
+FOOD_ENERGY = 0.35
+ENERGY_DRAIN_IDLE = 1 / 240  # empty in ~4 sim-minutes at rest
+ENERGY_DRAIN_MOVING = 1 / 90  # additional drain at full speed
+LOW_ENERGY = 0.25  # below this, hunger weakens the body
+WEAK_SPEED_FLOOR = 0.3  # fraction of strength left at zero energy
+
 # (along-body sign, side sign, gait phase offset) - diagonal pairs move together,
 # like a quadruped trot.
 LEG_LAYOUT = [
@@ -110,6 +121,15 @@ def _generate_floor_plan(width, height, rng):
     }
     _bsp(interior, rng.randint(2, 3), walls, rooms, rng)
     return walls, rooms
+
+
+def _rects_overlap(a, b):
+    return (
+        a["x"] < b["x"] + b["w"]
+        and a["x"] + a["w"] > b["x"]
+        and a["y"] < b["y"] + b["h"]
+        and a["y"] + a["h"] > b["y"]
+    )
 
 
 def _overlaps_wall(x, y, radius, walls):
@@ -222,6 +242,7 @@ class Creature:
         self.turn_rate = 0.0
         self.touch = False
         self.vision = []
+        self.energy = 1.0
 
     def head_pos(self):
         offset = self.body_length / 2
@@ -230,36 +251,71 @@ class Creature:
             self.y + math.sin(self.heading) * offset,
         )
 
-    def step(self, dt, forward_speed, turn_rate, walls):
+    def step(self, dt, forward_speed, turn_rate, walls, boxes=()):
         forward_speed = max(0.0, min(MAX_SPEED, forward_speed))
         turn_rate = max(-MAX_TURN_RATE, min(MAX_TURN_RATE, turn_rate))
+
+        # Hunger weakens the body: below LOW_ENERGY, top speed tapers off.
+        if self.energy < LOW_ENERGY:
+            weakness = WEAK_SPEED_FLOOR + (1 - WEAK_SPEED_FLOOR) * (self.energy / LOW_ENERGY)
+            forward_speed *= weakness
+
+        drain = ENERGY_DRAIN_IDLE + ENERGY_DRAIN_MOVING * (forward_speed / MAX_SPEED)
+        self.energy = max(0.0, self.energy - drain * dt)
 
         self.heading = _wrap_angle(self.heading + turn_rate * dt)
 
         dx = math.cos(self.heading) * forward_speed * dt
         dy = math.sin(self.heading) * forward_speed * dt
 
-        blocked = False
-        new_x = self.x + dx
-        if _overlaps_wall(new_x, self.y, COLLISION_RADIUS, walls):
-            blocked = True
-        else:
-            self.x = new_x
-        new_y = self.y + dy
-        if _overlaps_wall(self.x, new_y, COLLISION_RADIUS, walls):
-            blocked = True
-        else:
-            self.y = new_y
+        touched = False
+        for axis_dx, axis_dy in ((dx, 0.0), (0.0, dy)):
+            moved, contact = self._move_axis(axis_dx, axis_dy, walls, boxes)
+            touched = touched or contact
 
-        self.touch = blocked
+        self.touch = touched
         self.speed = forward_speed
         self.turn_rate = turn_rate
         self.moving = forward_speed > 1 or abs(turn_rate) > 0.2
         if self.moving:
             self.leg_phase += dt * LEG_CYCLE_RATE
 
-    def sense(self, walls):
-        """Recompute the sensory snapshot. Vision rays fan out from the head."""
+    def _move_axis(self, dx, dy, walls, boxes):
+        """Try to move along one axis, pushing a box out of the way if the
+        body meets one. Returns (moved, touched) - touched is any body
+        contact: a blocking wall, a blocked box, or a successful push."""
+        if dx == 0.0 and dy == 0.0:
+            return False, False
+        new_x, new_y = self.x + dx, self.y + dy
+
+        if _overlaps_wall(new_x, new_y, COLLISION_RADIUS, walls):
+            return False, True
+
+        hit = None
+        for box in boxes:
+            if _overlaps_wall(new_x, new_y, COLLISION_RADIUS, [box]):
+                hit = box
+                break
+        if hit is None:
+            self.x, self.y = new_x, new_y
+            return True, False
+
+        # Push: the box moves by the same displacement, if nothing stops it.
+        pushed = {"x": hit["x"] + dx, "y": hit["y"] + dy, "w": hit["w"], "h": hit["h"]}
+        clear = not any(_rects_overlap(pushed, wall) for wall in walls) and not any(
+            other is not hit and _rects_overlap(pushed, other) for other in boxes
+        )
+        if not clear:
+            return False, True  # box jammed against something; it blocks us
+
+        hit["x"], hit["y"] = pushed["x"], pushed["y"]
+        self.x, self.y = new_x, new_y
+        return True, True  # moved, and we feel the box against our body
+
+    def sense(self, obstacles):
+        """Recompute the sensory snapshot. Vision rays fan out from the head.
+        Obstacles are anything opaque: walls and boxes alike - the creature
+        sees surfaces, not categories."""
         ox, oy = self.head_pos()
         rays = []
         for i in range(NUM_VISION_RAYS):
@@ -267,8 +323,8 @@ class Creature:
             angle = self.heading + (frac - 0.5) * VISION_ARC
             dx, dy = math.cos(angle), math.sin(angle)
             nearest = VISION_RANGE
-            for wall in walls:
-                t = _ray_aabb(ox, oy, dx, dy, wall)
+            for obstacle in obstacles:
+                t = _ray_aabb(ox, oy, dx, dy, obstacle)
                 if t is not None and t < nearest:
                     nearest = t
             rays.append(
@@ -287,6 +343,9 @@ class Creature:
             "vision": self.vision,
             "vision_range": VISION_RANGE,
             "touch": self.touch,
+            "interoception": {
+                "energy": round(self.energy, 4),
+            },
             "proprioception": {
                 "heading_sin": round(math.sin(self.heading), 4),
                 "heading_cos": round(math.cos(self.heading), 4),
@@ -343,11 +402,72 @@ class World:
         self.height = height
         self.walls, self.rooms = _generate_floor_plan(width, height, rng)
         self.creatures = [self._spawn_creature(rng) for _ in range(num_creatures)]
+        self.boxes = []
+        for _ in range(NUM_BOXES):
+            box = self._spawn_box(rng)
+            if box is not None:
+                self.boxes.append(box)
+        self.food = []
+        for _ in range(NUM_FOOD):
+            pellet = self._spawn_food(rng)
+            if pellet is not None:
+                self.food.append(pellet)
         self.seek = SeekController()
         self.wander = WanderController()
         self.mode = "manual"  # "manual" (click-to-move) or "wander"
         for creature in self.creatures:
-            creature.sense(self.walls)
+            creature.sense(self.obstacles())
+
+    def obstacles(self):
+        """Everything opaque and solid: walls plus boxes."""
+        return self.walls + self.boxes
+
+    def _spawn_box(self, rng, max_attempts=100):
+        margin = WALL_THICKNESS + 4
+        for _ in range(max_attempts):
+            room = rng.choice(self.rooms)
+            if room["w"] <= 2 * margin + BOX_SIZE or room["h"] <= 2 * margin + BOX_SIZE:
+                continue
+            box = {
+                "x": rng.uniform(room["x"] + margin, room["x"] + room["w"] - margin - BOX_SIZE),
+                "y": rng.uniform(room["y"] + margin, room["y"] + room["h"] - margin - BOX_SIZE),
+                "w": BOX_SIZE,
+                "h": BOX_SIZE,
+            }
+            if any(_rects_overlap(box, wall) for wall in self.walls):
+                continue
+            if any(_rects_overlap(box, other) for other in self.boxes):
+                continue
+            creature = self.creatures[0] if self.creatures else None
+            if creature and _overlaps_wall(creature.x, creature.y, COLLISION_RADIUS + 4, [box]):
+                continue
+            return box
+        return None
+
+    def _spawn_food(self, rng, max_attempts=100):
+        margin = WALL_THICKNESS + FOOD_RADIUS + 4
+        for _ in range(max_attempts):
+            room = rng.choice(self.rooms)
+            if room["w"] <= 2 * margin or room["h"] <= 2 * margin:
+                continue
+            x = rng.uniform(room["x"] + margin, room["x"] + room["w"] - margin)
+            y = rng.uniform(room["y"] + margin, room["y"] + room["h"] - margin)
+            if _overlaps_wall(x, y, FOOD_RADIUS, self.obstacles()):
+                continue
+            return {"x": round(x, 2), "y": round(y, 2)}
+        return None
+
+    def _eat(self):
+        """Food within body reach is eaten; each pellet respawns elsewhere."""
+        if not self.creatures:
+            return
+        creature = self.creatures[0]
+        for i, pellet in enumerate(self.food):
+            if math.hypot(creature.x - pellet["x"], creature.y - pellet["y"]) < COLLISION_RADIUS + FOOD_RADIUS:
+                creature.energy = min(1.0, creature.energy + FOOD_ENERGY)
+                fresh = self._spawn_food(random)
+                if fresh is not None:
+                    self.food[i] = fresh
 
     def _spawn_creature(self, rng, max_attempts=100):
         jitter_x = self.width * 0.15
@@ -392,13 +512,13 @@ class World:
                 continue
             x = random.uniform(room["x"] + margin, room["x"] + room["w"] - margin)
             y = random.uniform(room["y"] + margin, room["y"] + room["h"] - margin)
-            if _overlaps_wall(x, y, COLLISION_RADIUS + 2, self.walls):
+            if _overlaps_wall(x, y, COLLISION_RADIUS + 2, self.obstacles()):
                 continue
             creature.x = x
             creature.y = y
             creature.heading = random.uniform(-math.pi, math.pi)
             self.seek.target = None
-            creature.sense(self.walls)
+            creature.sense(self.obstacles())
             return
 
     def set_target(self, x, y):
@@ -421,8 +541,9 @@ class World:
         creature = self.creatures[0]
         controller = self.wander if self.mode == "wander" else self.seek
         forward, turn = controller.commands(creature, dt)
-        creature.step(dt, forward, turn, self.walls)
-        creature.sense(self.walls)
+        creature.step(dt, forward, turn, self.walls, self.boxes)
+        self._eat()
+        creature.sense(self.obstacles())
 
     def to_dict(self):
         return {
@@ -430,6 +551,8 @@ class World:
             "height": self.height,
             "walls": self.walls,
             "rooms": self.rooms,
+            "boxes": self.boxes,
+            "food": self.food,
             "creature_room": self.creature_room(),
             "mode": self.mode,
             "target": list(self.seek.target) if self.seek.target else None,
