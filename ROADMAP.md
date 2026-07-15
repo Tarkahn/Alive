@@ -15,30 +15,32 @@ beginning.
 - **Phase B — First brain (prediction & surprise)**: htm.core encoders →
   Spatial Pooler → Temporal Memory over the sensory stream; live surprise
   (anomaly) meter and sparkline; brain state persistence.
+- **Phase C — Localization: "knows where it is by looking"**:
+  sensorimotor prediction (TM conditioned on the motor efference copy in the
+  encoded input); location readout via an SDR classifier (htm.core
+  `Predictor`) from TM active cells → room label, trained online against
+  `World.rooms` ground truth; per-room belief bars in the UI (● marks the
+  true room); **kidnap button** — teleport to a random room, brain intact,
+  and watch the belief re-converge as the creature looks around. Room labels
+  are drawn on the canvas; classifier state persists with the rest of the
+  brain (and is discarded if the floor plan changed).
+- **Phase D (first half) — Acting on the world**: pushable boxes — the
+  creature shoves them with its body, they jam against walls and each other,
+  they occlude vision (the creature sees surfaces, not categories), and
+  pushing registers as touch. Food and an energy drive: energy drains with
+  time and movement, food restores it (pellets respawn elsewhere), hunger
+  weakens top speed, and energy feeds the encoder stack as **interoception**
+  — self-awareness includes sensing one's own body state. Energy meter in
+  the panel. Brain state from an older sensory layout is detected and
+  discarded rather than crashing.
 
 ## Next
 
-### Phase C — Localization: "knows where it is by looking"
+### Phase D (second half) — Survival
 
-1. **Sensorimotor prediction**: condition Temporal Memory predictions on the
-   motor efference copy (already in the encoded input) — "if I turn left
-   here, I should see the doorway."
-2. **Location readout** (measurement, not control): the BSP generator already
-   stores room rectangles in `World.rooms`. Train an SDR classifier
-   (htm.core `Predictor`) from TM active cells → room label. UI panel with
-   per-room belief bars.
-3. **Kidnapped-creature test**: teleport the creature to a random room,
-   brain intact; watch the room-belief converge to the truth as it looks
-   around and moves. This is the demoable milestone for "knows where it is
-   simply by looking around."
-
-### Phase D — Acting on the world & survival
-
-4. Pushable objects (body pushing), then pinchers as articulated actuators.
-5. Food and an energy drive; hunger as interoception fed into the same
-   encoder stack (self-awareness includes sensing one's own body state).
-6. Predators with scripted hunting; evasion becomes a survival pressure.
-7. Curiosity-driven exploration: use the anomaly signal as intrinsic reward
+1. Pinchers as articulated actuators (grasping, not just shoving).
+2. Predators with scripted hunting; evasion becomes a survival pressure.
+3. Curiosity-driven exploration: use the anomaly signal as intrinsic reward
    for the wander controller (seek the unfamiliar).
 
 ### Later — Thousand Brains

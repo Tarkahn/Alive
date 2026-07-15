@@ -18,6 +18,6 @@ def build(world):
     if not available:
         return None
     try:
-        return Cortex()
+        return Cortex(num_rooms=len(world.rooms))
     except Exception:
         return None

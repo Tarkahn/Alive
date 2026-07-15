@@ -10,7 +10,11 @@ const anomalyBarEl = document.getElementById("anomaly-bar");
 const sparkCanvas = document.getElementById("anomaly-spark");
 const sparkCtx = sparkCanvas.getContext("2d");
 const visionBarsEl = document.getElementById("vision-bars");
+const roomBarsEl = document.getElementById("room-bars");
+const kidnapBtn = document.getElementById("kidnap-btn");
 const touchEl = document.querySelector("#touch-indicator span");
+const energyValueEl = document.getElementById("energy-value");
+const energyBarEl = document.getElementById("energy-bar");
 const proprioEl = document.getElementById("proprio");
 
 let socket = null;
@@ -50,6 +54,11 @@ canvas.addEventListener("click", (event) => {
   socket.send(JSON.stringify({ type: "move_to", x, y }));
 });
 
+kidnapBtn.addEventListener("click", () => {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: "kidnap" }));
+});
+
 wanderToggle.addEventListener("change", () => {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   const mode = wanderToggle.checked ? "wander" : "manual";
@@ -70,6 +79,28 @@ function render(world) {
     ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
     ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
   }
+
+  for (const box of world.boxes || []) {
+    ctx.fillStyle = "#8a6d3b";
+    ctx.strokeStyle = "#b59460";
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+  }
+
+  for (const pellet of world.food || []) {
+    ctx.fillStyle = "#2ecc71";
+    ctx.beginPath();
+    ctx.arc(pellet.x, pellet.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.font = "16px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  world.rooms.forEach((room, i) => {
+    ctx.fillStyle = i === world.creature_room ? "rgba(46, 204, 113, 0.5)" : "rgba(138, 145, 168, 0.28)";
+    ctx.fillText(String(i + 1), room.x + room.w / 2, room.y + room.h / 2);
+  });
 
   if (world.target) {
     ctx.strokeStyle = "#8a91a8";
@@ -162,12 +193,20 @@ function updatePanel(world) {
   touchEl.textContent = senses.touch ? "YES" : "no";
   touchEl.className = senses.touch ? "on" : "";
 
+  const energy = senses.interoception ? senses.interoception.energy : null;
+  if (energy !== null) {
+    energyValueEl.textContent = energy.toFixed(2);
+    energyBarEl.style.width = `${Math.round(energy * 100)}%`;
+  }
+
   const p = senses.proprioception;
   proprioEl.textContent =
     `speed: ${p.speed}\n` +
     `turn rate: ${p.turn_rate}\n` +
     `heading: (${p.heading_cos}, ${p.heading_sin})\n` +
     `mode: ${world.mode}`;
+
+  updateRoomBars(world);
 
   const brain = world.brain || { available: false };
   if (brain.available) {
@@ -187,6 +226,39 @@ function updatePanel(world) {
   }
 
   wanderToggle.checked = world.mode === "wander";
+}
+
+function updateRoomBars(world) {
+  const numRooms = world.rooms.length;
+  if (roomBarsEl.childElementCount !== numRooms) {
+    roomBarsEl.innerHTML = "";
+    for (let i = 0; i < numRooms; i++) {
+      const row = document.createElement("div");
+      row.className = "room-row";
+      row.innerHTML =
+        `<span class="room-label">${i + 1}</span>` +
+        `<div class="room-meter"><div class="room-fill"></div></div>` +
+        `<span class="room-pct">–</span>`;
+      roomBarsEl.appendChild(row);
+    }
+  }
+
+  const belief = (world.brain && world.brain.room_belief) || null;
+  for (let i = 0; i < numRooms; i++) {
+    const row = roomBarsEl.children[i];
+    const label = row.querySelector(".room-label");
+    const fill = row.querySelector(".room-fill");
+    const pct = row.querySelector(".room-pct");
+    label.classList.toggle("actual", i === world.creature_room);
+    if (belief && belief.length === numRooms) {
+      const p = belief[i];
+      fill.style.width = `${Math.round(p * 100)}%`;
+      pct.textContent = `${Math.round(p * 100)}%`;
+    } else {
+      fill.style.width = "0%";
+      pct.textContent = "–";
+    }
+  }
 }
 
 function drawOfflineSparkline() {

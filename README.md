@@ -15,23 +15,34 @@ See `ROADMAP.md` for where this is headed.
 - **World** (`backend/simulation.py`): BSP-generated floor plan (fixed by
   `WORLD_SEED`, default 42, so the map survives restarts — you can't learn a
   map that changes under you). Creature physics, collision, raycast vision.
+  Pushable boxes the creature can shove around with its body (they occlude
+  vision like walls do — it sees surfaces, not categories). Food pellets and
+  an energy drive: energy drains with time and movement, hunger weakens the
+  body, eating restores it, and the energy level is sensed as interoception.
 - **Brain** (`backend/brain/`): sensory encoders → SDRs → Spatial Pooler →
-  Temporal Memory (htm.core). Output: an anomaly score per tick — how
-  *surprised* the creature is by what it senses. Familiar places become
-  boring; new rooms spike surprise. Brain state is saved to `brain_state/`
-  periodically so learning survives restarts.
+  Temporal Memory (htm.core). Outputs: an anomaly score per tick — how
+  *surprised* the creature is by what it senses (familiar places become
+  boring; new rooms spike surprise) — and a **room belief**: an SDR
+  classifier reads the Temporal Memory's active cells and estimates which
+  room the creature is in, from senses alone. Brain state is saved to
+  `brain_state/` periodically so learning survives restarts.
 - **Server** (`backend/main.py`): FastAPI; steps the world and brain at 30Hz,
   streams state over a WebSocket.
 - **UI** (`frontend/`): canvas renderer with a sensor overlay (vision rays,
-  touch flash), a brain panel (surprise meter + history sparkline), and
-  controls. Click the floor: the creature walks there (straight-line — it has
-  no pathfinding yet; walls stop it honestly). Toggle **autonomous wander**
-  to let it roam and learn on its own.
+  touch flash), a brain panel (surprise meter + history sparkline), a
+  location panel (per-room belief bars; ● marks the room it's really in),
+  and controls. Click the floor: the creature walks there (straight-line — it
+  has no pathfinding yet; walls stop it honestly). Toggle **autonomous
+  wander** to let it roam and learn on its own. The **kidnap** button is the
+  localization test: it teleports the creature to a random room with its
+  brain intact — watch the room belief re-converge as it looks around.
 
 Design rules: the brain only ever receives senses plus a copy of its own
-motor commands — never world coordinates. And every controller (player click,
-wander, future brains) drives the creature through the same motor interface:
-`(forward_speed, turn_rate)`.
+motor commands — never world coordinates. The room classifier is a *readout*,
+not an input: it learns to decode the brain's internal state into a room
+label, and nothing flows back from it into perception or control. And every
+controller (player click, wander, future brains) drives the creature through
+the same motor interface: `(forward_speed, turn_rate)`.
 
 ## Running locally
 

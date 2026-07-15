@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Alive</title>
-  <link rel="stylesheet" href="/static/style.css?v=2" />
+  <link rel="stylesheet" href="/static/style.css?v=4" />
 </head>
 <body>
   <h1>Alive</h1>
@@ -23,15 +23,23 @@
         <canvas id="anomaly-spark" width="220" height="40"></canvas>
       </div>
       <div class="panel-section">
+        <h2>Location</h2>
+        <div class="meter-label">room belief (● = truth)</div>
+        <div id="room-bars"></div>
+        <button id="kidnap-btn">kidnap → random room</button>
+      </div>
+      <div class="panel-section">
         <h2>Senses</h2>
         <div class="meter-label">vision (left → right)</div>
         <div id="vision-bars"></div>
         <div id="touch-indicator">touch: <span>no</span></div>
+        <div class="meter-label">energy <span id="energy-value">–</span></div>
+        <div class="meter"><div id="energy-bar"></div></div>
         <div id="proprio"></div>
       </div>
     </aside>
   </div>
   <p id="status">connecting...</p>
-  <script src="/static/main.js?v=2"></script>
+  <script src="/static/main.js?v=4"></script>
 </body>
 </html>
