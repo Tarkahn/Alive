@@ -359,6 +359,48 @@ class World:
                 return Creature(x, y)
         return Creature(self.width / 2, self.height / 2)
 
+    def room_index(self, x, y):
+        """Index of the room rect containing (x, y), or -1 (e.g. inside a
+        boundary wall). Ground truth for the localization readout - the brain
+        never sees coordinates, only the room *label* during training."""
+        for i, room in enumerate(self.rooms):
+            if room["x"] <= x <= room["x"] + room["w"] and room["y"] <= y <= room["y"] + room["h"]:
+                return i
+        return -1
+
+    def creature_room(self):
+        if not self.creatures:
+            return -1
+        creature = self.creatures[0]
+        return self.room_index(creature.x, creature.y)
+
+    def kidnap(self, max_attempts=100):
+        """Teleport the creature to a random spot in a different room, brain
+        intact. The kidnapped-creature test: watch the room belief re-converge
+        as it looks around."""
+        if not self.creatures:
+            return
+        creature = self.creatures[0]
+        current = self.creature_room()
+        candidates = [i for i in range(len(self.rooms)) if i != current] or list(range(len(self.rooms)))
+        if not candidates:
+            return
+        margin = COLLISION_RADIUS + WALL_THICKNESS
+        for _ in range(max_attempts):
+            room = self.rooms[random.choice(candidates)]
+            if room["w"] <= 2 * margin or room["h"] <= 2 * margin:
+                continue
+            x = random.uniform(room["x"] + margin, room["x"] + room["w"] - margin)
+            y = random.uniform(room["y"] + margin, room["y"] + room["h"] - margin)
+            if _overlaps_wall(x, y, COLLISION_RADIUS + 2, self.walls):
+                continue
+            creature.x = x
+            creature.y = y
+            creature.heading = random.uniform(-math.pi, math.pi)
+            self.seek.target = None
+            creature.sense(self.walls)
+            return
+
     def set_target(self, x, y):
         if not self.creatures:
             return
@@ -388,6 +430,7 @@ class World:
             "height": self.height,
             "walls": self.walls,
             "rooms": self.rooms,
+            "creature_room": self.creature_room(),
             "mode": self.mode,
             "target": list(self.seek.target) if self.seek.target else None,
             "creatures": [c.to_dict() for c in self.creatures],

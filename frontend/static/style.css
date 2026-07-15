@@ -86,6 +86,75 @@ canvas#anomaly-spark {
   width: 100%;
 }
 
+#room-bars {
+  margin-bottom: 0.5rem;
+}
+
+.room-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 3px;
+}
+
+.room-label {
+  width: 2.2em;
+  color: #8a91a8;
+  text-align: right;
+}
+
+.room-label::after {
+  content: " ●";
+  font-size: 0.7em;
+  color: transparent; /* reserve the marker's width so rows stay aligned */
+}
+
+.room-label.actual {
+  color: #2ecc71;
+  font-weight: bold;
+}
+
+.room-label.actual::after {
+  color: #2ecc71;
+}
+
+.room-meter {
+  flex: 1;
+  height: 8px;
+  background: #262b3b;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.room-fill {
+  height: 100%;
+  width: 0%;
+  background: #3498db;
+  transition: width 0.15s linear;
+}
+
+.room-pct {
+  width: 2.6em;
+  color: #8a91a8;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#kidnap-btn {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  background: #262b3b;
+  color: #e6e6e6;
+  border: 1px solid #454b63;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+#kidnap-btn:hover {
+  background: #333a4d;
+}
+
 #vision-bars {
   display: flex;
   gap: 2px;

@@ -55,6 +55,8 @@ async def ws_endpoint(websocket: WebSocket):
                     world.set_target(x, y)
             elif kind == "set_mode":
                 world.set_mode(message.get("mode"))
+            elif kind == "kidnap":
+                world.kidnap()
     except WebSocketDisconnect:
         pass
     finally:
@@ -73,7 +75,7 @@ async def simulation_loop():
         await asyncio.sleep(dt)
         world.step(dt)
         if cortex:
-            cortex.step(world.creatures[0])
+            cortex.step(world.creatures[0], world.creature_room())
         if not connections:
             continue
         payload = json.dumps(_payload())

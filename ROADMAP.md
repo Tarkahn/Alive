@@ -15,30 +15,25 @@ beginning.
 - **Phase B — First brain (prediction & surprise)**: htm.core encoders →
   Spatial Pooler → Temporal Memory over the sensory stream; live surprise
   (anomaly) meter and sparkline; brain state persistence.
+- **Phase C — Localization: "knows where it is by looking"**:
+  sensorimotor prediction (TM conditioned on the motor efference copy in the
+  encoded input); location readout via an SDR classifier (htm.core
+  `Predictor`) from TM active cells → room label, trained online against
+  `World.rooms` ground truth; per-room belief bars in the UI (● marks the
+  true room); **kidnap button** — teleport to a random room, brain intact,
+  and watch the belief re-converge as the creature looks around. Room labels
+  are drawn on the canvas; classifier state persists with the rest of the
+  brain (and is discarded if the floor plan changed).
 
 ## Next
 
-### Phase C — Localization: "knows where it is by looking"
-
-1. **Sensorimotor prediction**: condition Temporal Memory predictions on the
-   motor efference copy (already in the encoded input) — "if I turn left
-   here, I should see the doorway."
-2. **Location readout** (measurement, not control): the BSP generator already
-   stores room rectangles in `World.rooms`. Train an SDR classifier
-   (htm.core `Predictor`) from TM active cells → room label. UI panel with
-   per-room belief bars.
-3. **Kidnapped-creature test**: teleport the creature to a random room,
-   brain intact; watch the room-belief converge to the truth as it looks
-   around and moves. This is the demoable milestone for "knows where it is
-   simply by looking around."
-
 ### Phase D — Acting on the world & survival
 
-4. Pushable objects (body pushing), then pinchers as articulated actuators.
-5. Food and an energy drive; hunger as interoception fed into the same
+1. Pushable objects (body pushing), then pinchers as articulated actuators.
+2. Food and an energy drive; hunger as interoception fed into the same
    encoder stack (self-awareness includes sensing one's own body state).
-6. Predators with scripted hunting; evasion becomes a survival pressure.
-7. Curiosity-driven exploration: use the anomaly signal as intrinsic reward
+3. Predators with scripted hunting; evasion becomes a survival pressure.
+4. Curiosity-driven exploration: use the anomaly signal as intrinsic reward
    for the wander controller (seek the unfamiliar).
 
 ### Later — Thousand Brains
