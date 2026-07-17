@@ -33,15 +33,25 @@ beginning.
   — self-awareness includes sensing one's own body state. Energy meter in
   the panel. Brain state from an older sensory layout is detected and
   discarded rather than crashing.
+- **Phase D (second half) — Survival pressure**: predators — a scripted
+  hunter always seeking the creature's position, same walls-stop-it-honestly
+  collision as everything else (no pathfinding, no stealth), visible to
+  vision rays so the brain has something to associate with danger. A bite
+  drains energy and starts a cooldown, so evasion (actually running) matters
+  instead of being chain-bitten. Curiosity-driven exploration: the wander
+  controller now takes the brain's smoothed anomaly as an intrinsic-reward
+  signal — bored (familiar, low-anomaly) states re-roll direction far more
+  often to go find somewhere unfamiliar, novel (high-anomaly) states let the
+  current heading run longer to investigate. Falls back to plain random-walk
+  babbling when no brain is present, so `World.step` stays brain-agnostic.
 
 ## Next
 
-### Phase D (second half) — Survival
+### Phase D (remaining) — Grasping
 
-1. Pinchers as articulated actuators (grasping, not just shoving).
-2. Predators with scripted hunting; evasion becomes a survival pressure.
-3. Curiosity-driven exploration: use the anomaly signal as intrinsic reward
-   for the wander controller (seek the unfamiliar).
+1. Pinchers as articulated actuators (grasping, not just shoving) — parked
+   until there's something worth grasping beyond what pushing already
+   covers.
 
 ### Later — Thousand Brains
 

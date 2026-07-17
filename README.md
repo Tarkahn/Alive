@@ -19,6 +19,9 @@ See `ROADMAP.md` for where this is headed.
   vision like walls do — it sees surfaces, not categories). Food pellets and
   an energy drive: energy drains with time and movement, hunger weakens the
   body, eating restores it, and the energy level is sensed as interoception.
+  A predator hunts the creature (straight-line pursuit, same wall collision
+  as everything else); a bite drains energy and starts a cooldown, so
+  actually evading it matters.
 - **Brain** (`backend/brain/`): sensory encoders → SDRs → Spatial Pooler →
   Temporal Memory (htm.core). Outputs: an anomaly score per tick — how
   *surprised* the creature is by what it senses (familiar places become
@@ -33,8 +36,11 @@ See `ROADMAP.md` for where this is headed.
   location panel (per-room belief bars; ● marks the room it's really in),
   and controls. Click the floor: the creature walks there (straight-line — it
   has no pathfinding yet; walls stop it honestly). Toggle **autonomous
-  wander** to let it roam and learn on its own. The **kidnap** button is the
-  localization test: it teleports the creature to a random room with its
+  wander** to let it roam and learn on its own — with a brain online, wander
+  is curiosity-driven: it uses the anomaly (surprise) signal as an intrinsic
+  reward, changing direction more when bored (familiar surroundings) and
+  less when something novel is worth investigating. The **kidnap** button is
+  the localization test: it teleports the creature to a random room with its
   brain intact — watch the room belief re-converge as it looks around.
 
 Design rules: the brain only ever receives senses plus a copy of its own

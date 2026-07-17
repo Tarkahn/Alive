@@ -116,6 +116,20 @@ function render(world) {
     }
     drawCreature(creature);
   }
+
+  for (const predator of world.predators || []) {
+    drawPredator(predator);
+  }
+}
+
+function drawPredator(predator) {
+  ctx.fillStyle = "#c0392b";
+  ctx.strokeStyle = "#e74c3c";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(predator.x, predator.y, predator.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawSenses(creature) {

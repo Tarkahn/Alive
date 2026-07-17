@@ -38,6 +38,13 @@ ENERGY_DRAIN_MOVING = 1 / 90  # additional drain at full speed
 LOW_ENERGY = 0.25  # below this, hunger weakens the body
 WEAK_SPEED_FLOOR = 0.3  # fraction of strength left at zero energy
 
+NUM_PREDATORS = 1
+PREDATOR_RADIUS = 9
+PREDATOR_MAX_SPEED = MAX_SPEED * 0.75  # slower than the creature's top speed - outrunnable if it commits
+PREDATOR_TURN_RATE = MAX_TURN_RATE * 0.6
+BITE_ENERGY_LOSS = 0.25
+BITE_COOLDOWN = 2.0  # seconds of grace after a bite before it can bite again
+
 # (along-body sign, side sign, gait phase offset) - diagonal pairs move together,
 # like a quadruped trot.
 LEG_LAYOUT = [
@@ -209,16 +216,30 @@ class SeekController:
 
 
 class WanderController:
-    """Random-walk motor babbling so the creature gathers experience on its own."""
+    """Random-walk motor babbling so the creature gathers experience on its own.
+
+    Curiosity: when a brain is present, its anomaly (surprise) signal is fed
+    in as an intrinsic reward. Low anomaly means the current surroundings are
+    already well-predicted - boring - so we re-roll direction more often to
+    go find somewhere unfamiliar. High anomaly means something novel is
+    nearby, so we let the current heading run longer to investigate it.
+    With no signal (curiosity=None, e.g. brain offline) it's plain
+    random-walk babbling, unchanged from before.
+    """
+
+    BORED_ANOMALY = 0.15
+    BORED_TIMER_RANGE = (0.2, 0.8)
+    CURIOUS_TIMER_RANGE = (0.5, 2.0)
 
     def __init__(self):
         self.turn_bias = 0.0
         self.timer = 0.0
 
-    def commands(self, creature, dt):
+    def commands(self, creature, dt, curiosity=None):
         self.timer -= dt
         if self.timer <= 0:
-            self.timer = random.uniform(0.5, 2.0)
+            bored = curiosity is not None and curiosity < self.BORED_ANOMALY
+            self.timer = random.uniform(*(self.BORED_TIMER_RANGE if bored else self.CURIOUS_TIMER_RANGE))
             self.turn_bias = random.uniform(-1.5, 1.5)
         if creature.touch:
             # Bumped a wall: turn away decisively.
@@ -392,6 +413,47 @@ class Creature:
         }
 
 
+class Predator:
+    """Scripted hunter: always seeks straight toward the creature, same
+    walls-stop-it-honestly collision as everything else (no pathfinding).
+    A cooldown after each bite gives the creature a real window to flee
+    rather than being chain-bitten while it backs away."""
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.heading = random.uniform(-math.pi, math.pi)
+        self.bite_cooldown = 0.0
+
+    def rect(self):
+        return {
+            "x": self.x - PREDATOR_RADIUS,
+            "y": self.y - PREDATOR_RADIUS,
+            "w": PREDATOR_RADIUS * 2,
+            "h": PREDATOR_RADIUS * 2,
+        }
+
+    def step(self, dt, target_x, target_y, obstacles):
+        self.bite_cooldown = max(0.0, self.bite_cooldown - dt)
+
+        desired = math.atan2(target_y - self.y, target_x - self.x)
+        diff = _wrap_angle(desired - self.heading)
+        turn_rate = max(-PREDATOR_TURN_RATE, min(PREDATOR_TURN_RATE, diff / max(dt, 1e-6)))
+        self.heading = _wrap_angle(self.heading + turn_rate * dt)
+
+        dx = math.cos(self.heading) * PREDATOR_MAX_SPEED * dt
+        dy = math.sin(self.heading) * PREDATOR_MAX_SPEED * dt
+        new_x = self.x + dx
+        if not _overlaps_wall(new_x, self.y, PREDATOR_RADIUS, obstacles):
+            self.x = new_x
+        new_y = self.y + dy
+        if not _overlaps_wall(self.x, new_y, PREDATOR_RADIUS, obstacles):
+            self.y = new_y
+
+    def to_dict(self):
+        return {"x": round(self.x, 2), "y": round(self.y, 2), "radius": PREDATOR_RADIUS}
+
+
 class World:
     def __init__(self, width=800, height=600, num_creatures=1, seed=None):
         if seed is None:
@@ -412,15 +474,26 @@ class World:
             pellet = self._spawn_food(rng)
             if pellet is not None:
                 self.food.append(pellet)
+        self.predators = []
+        for _ in range(NUM_PREDATORS):
+            predator = self._spawn_predator(rng)
+            if predator is not None:
+                self.predators.append(predator)
         self.seek = SeekController()
         self.wander = WanderController()
         self.mode = "manual"  # "manual" (click-to-move) or "wander"
         for creature in self.creatures:
-            creature.sense(self.obstacles())
+            creature.sense(self.sense_obstacles())
 
     def obstacles(self):
-        """Everything opaque and solid: walls plus boxes."""
+        """Everything solid: walls plus boxes. Used for movement/placement -
+        predators are a proximity threat, not something bodies collide with."""
         return self.walls + self.boxes
+
+    def sense_obstacles(self):
+        """Everything vision can see: obstacles plus predators, so the
+        creature can spot one coming before it's in biting range."""
+        return self.obstacles() + [p.rect() for p in self.predators]
 
     def _spawn_box(self, rng, max_attempts=100):
         margin = WALL_THICKNESS + 4
@@ -468,6 +541,37 @@ class World:
                 fresh = self._spawn_food(random)
                 if fresh is not None:
                     self.food[i] = fresh
+
+    def _spawn_predator(self, rng, max_attempts=100):
+        margin = WALL_THICKNESS + PREDATOR_RADIUS + 4
+        creature = self.creatures[0] if self.creatures else None
+        start_room = self.room_index(creature.x, creature.y) if creature else -1
+        candidates = [r for i, r in enumerate(self.rooms) if i != start_room] or self.rooms
+        for _ in range(max_attempts):
+            room = rng.choice(candidates)
+            if room["w"] <= 2 * margin or room["h"] <= 2 * margin:
+                continue
+            x = rng.uniform(room["x"] + margin, room["x"] + room["w"] - margin)
+            y = rng.uniform(room["y"] + margin, room["y"] + room["h"] - margin)
+            if _overlaps_wall(x, y, PREDATOR_RADIUS, self.obstacles()):
+                continue
+            return Predator(x, y)
+        return None
+
+    def _hunt(self, dt):
+        """Predators pursue the creature; a bite drains energy and starts a
+        cooldown so it's an escapable threat, not an instant, repeated drain."""
+        if not self.creatures:
+            return
+        creature = self.creatures[0]
+        obstacles = self.obstacles()
+        for predator in self.predators:
+            predator.step(dt, creature.x, creature.y, obstacles)
+            if predator.bite_cooldown <= 0 and math.hypot(
+                creature.x - predator.x, creature.y - predator.y
+            ) < COLLISION_RADIUS + PREDATOR_RADIUS:
+                creature.energy = max(0.0, creature.energy - BITE_ENERGY_LOSS)
+                predator.bite_cooldown = BITE_COOLDOWN
 
     def _spawn_creature(self, rng, max_attempts=100):
         jitter_x = self.width * 0.15
@@ -518,7 +622,7 @@ class World:
             creature.y = y
             creature.heading = random.uniform(-math.pi, math.pi)
             self.seek.target = None
-            creature.sense(self.obstacles())
+            creature.sense(self.sense_obstacles())
             return
 
     def set_target(self, x, y):
@@ -535,15 +639,18 @@ class World:
             if mode == "wander":
                 self.seek.target = None
 
-    def step(self, dt):
+    def step(self, dt, curiosity=None):
         if not self.creatures:
             return
         creature = self.creatures[0]
-        controller = self.wander if self.mode == "wander" else self.seek
-        forward, turn = controller.commands(creature, dt)
+        if self.mode == "wander":
+            forward, turn = self.wander.commands(creature, dt, curiosity)
+        else:
+            forward, turn = self.seek.commands(creature, dt)
         creature.step(dt, forward, turn, self.walls, self.boxes)
         self._eat()
-        creature.sense(self.obstacles())
+        self._hunt(dt)
+        creature.sense(self.sense_obstacles())
 
     def to_dict(self):
         return {
@@ -553,6 +660,7 @@ class World:
             "rooms": self.rooms,
             "boxes": self.boxes,
             "food": self.food,
+            "predators": [p.to_dict() for p in self.predators],
             "creature_room": self.creature_room(),
             "mode": self.mode,
             "target": list(self.seek.target) if self.seek.target else None,
