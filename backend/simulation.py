@@ -43,7 +43,9 @@ PREDATOR_RADIUS = 9
 PREDATOR_MAX_SPEED = MAX_SPEED * 0.75  # slower than the creature's top speed - outrunnable if it commits
 PREDATOR_TURN_RATE = MAX_TURN_RATE * 0.6
 BITE_ENERGY_LOSS = 0.25
-BITE_COOLDOWN = 2.0  # seconds of grace after a bite before it can bite again
+SATIATED_SECONDS = 20.0  # after a bite the predator is sated: goes home, no hunting
+PAIN_DECAY_PER_SEC = 0.5  # a bite's pain lingers for ~2 seconds
+HEARING_RANGE = 200.0  # how far away predator footsteps are audible (through walls)
 
 # (along-body sign, side sign, gait phase offset) - diagonal pairs move together,
 # like a quadruped trot.
@@ -264,6 +266,8 @@ class Creature:
         self.touch = False
         self.vision = []
         self.energy = 1.0
+        self.pain = 0.0
+        self.hearing = 0.0  # set by the World: predator-footstep loudness
 
     def head_pos(self):
         offset = self.body_length / 2
@@ -283,6 +287,7 @@ class Creature:
 
         drain = ENERGY_DRAIN_IDLE + ENERGY_DRAIN_MOVING * (forward_speed / MAX_SPEED)
         self.energy = max(0.0, self.energy - drain * dt)
+        self.pain = max(0.0, self.pain - PAIN_DECAY_PER_SEC * dt)
 
         self.heading = _wrap_angle(self.heading + turn_rate * dt)
 
@@ -364,8 +369,10 @@ class Creature:
             "vision": self.vision,
             "vision_range": VISION_RANGE,
             "touch": self.touch,
+            "hearing": round(self.hearing, 4),
             "interoception": {
                 "energy": round(self.energy, 4),
+                "pain": round(self.pain, 4),
             },
             "proprioception": {
                 "heading_sin": round(math.sin(self.heading), 4),
@@ -414,16 +421,28 @@ class Creature:
 
 
 class Predator:
-    """Scripted hunter: always seeks straight toward the creature, same
+    """Scripted hunter: seeks straight toward the creature, same
     walls-stop-it-honestly collision as everything else (no pathfinding).
-    A cooldown after each bite gives the creature a real window to flee
-    rather than being chain-bitten while it backs away."""
+    A bite sates it: it retreats to its home spot and doesn't hunt again
+    until hunger returns. That episodic rhythm (quiet -> approach -> bite ->
+    retreat) is what makes danger *learnable* - constant chain-biting would
+    just be uniform background pain with nothing to predict."""
 
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.home = (x, y)
         self.heading = random.uniform(-math.pi, math.pi)
-        self.bite_cooldown = 0.0
+        self.satiated_timer = 0.0
+        self.stuck_timer = 0.0
+        self.detour_timer = 0.0
+
+    @property
+    def hunting(self):
+        return self.satiated_timer <= 0
+
+    def bite(self):
+        self.satiated_timer = SATIATED_SECONDS
 
     def rect(self):
         return {
@@ -434,13 +453,23 @@ class Predator:
         }
 
     def step(self, dt, target_x, target_y, obstacles):
-        self.bite_cooldown = max(0.0, self.bite_cooldown - dt)
+        self.satiated_timer = max(0.0, self.satiated_timer - dt)
+        if not self.hunting:
+            target_x, target_y = self.home
+            if math.hypot(target_x - self.x, target_y - self.y) < PREDATOR_RADIUS:
+                return  # digesting at home
 
-        desired = math.atan2(target_y - self.y, target_x - self.x)
-        diff = _wrap_angle(desired - self.heading)
-        turn_rate = max(-PREDATOR_TURN_RATE, min(PREDATOR_TURN_RATE, diff / max(dt, 1e-6)))
-        self.heading = _wrap_angle(self.heading + turn_rate * dt)
+        # No pathfinding: straight-line seeking pins it against walls. When
+        # it stops making progress, it takes a short random-heading detour -
+        # dumb, but it slides off walls and eventually rounds doorways.
+        self.detour_timer = max(0.0, self.detour_timer - dt)
+        if self.detour_timer <= 0:
+            desired = math.atan2(target_y - self.y, target_x - self.x)
+            diff = _wrap_angle(desired - self.heading)
+            turn_rate = max(-PREDATOR_TURN_RATE, min(PREDATOR_TURN_RATE, diff / max(dt, 1e-6)))
+            self.heading = _wrap_angle(self.heading + turn_rate * dt)
 
+        old_x, old_y = self.x, self.y
         dx = math.cos(self.heading) * PREDATOR_MAX_SPEED * dt
         dy = math.sin(self.heading) * PREDATOR_MAX_SPEED * dt
         new_x = self.x + dx
@@ -450,8 +479,23 @@ class Predator:
         if not _overlaps_wall(self.x, new_y, PREDATOR_RADIUS, obstacles):
             self.y = new_y
 
+        moved = math.hypot(self.x - old_x, self.y - old_y)
+        if moved < PREDATOR_MAX_SPEED * dt * 0.25:
+            self.stuck_timer += dt
+            if self.stuck_timer > 1.2:
+                self.detour_timer = random.uniform(0.8, 1.8)
+                self.heading = random.uniform(-math.pi, math.pi)
+                self.stuck_timer = 0.0
+        else:
+            self.stuck_timer = 0.0
+
     def to_dict(self):
-        return {"x": round(self.x, 2), "y": round(self.y, 2), "radius": PREDATOR_RADIUS}
+        return {
+            "x": round(self.x, 2),
+            "y": round(self.y, 2),
+            "radius": PREDATOR_RADIUS,
+            "state": "hunting" if self.hunting else "satiated",
+        }
 
 
 class World:
@@ -483,6 +527,7 @@ class World:
         self.wander = WanderController()
         self.mode = "manual"  # "manual" (click-to-move) or "wander"
         for creature in self.creatures:
+            creature.hearing = self.hearing_proximity()
             creature.sense(self.sense_obstacles())
 
     def obstacles(self):
@@ -559,19 +604,32 @@ class World:
         return None
 
     def _hunt(self, dt):
-        """Predators pursue the creature; a bite drains energy and starts a
-        cooldown so it's an escapable threat, not an instant, repeated drain."""
+        """Predators pursue the creature while hungry; a bite drains energy,
+        fires the pain sense, and sates the predator (it retreats home)."""
         if not self.creatures:
             return
         creature = self.creatures[0]
         obstacles = self.obstacles()
         for predator in self.predators:
             predator.step(dt, creature.x, creature.y, obstacles)
-            if predator.bite_cooldown <= 0 and math.hypot(
+            if predator.hunting and math.hypot(
                 creature.x - predator.x, creature.y - predator.y
             ) < COLLISION_RADIUS + PREDATOR_RADIUS:
                 creature.energy = max(0.0, creature.energy - BITE_ENERGY_LOSS)
-                predator.bite_cooldown = BITE_COOLDOWN
+                creature.pain = 1.0
+                predator.bite()
+
+    def hearing_proximity(self):
+        """Omnidirectional hearing: how loud the nearest predator's footsteps
+        are (1 = on top of us, 0 = out of range). Sound carries through walls
+        - this is what lets the creature perceive a pursuer it cannot see."""
+        if not self.creatures or not self.predators:
+            return 0.0
+        creature = self.creatures[0]
+        nearest = min(
+            math.hypot(creature.x - p.x, creature.y - p.y) for p in self.predators
+        )
+        return max(0.0, 1.0 - nearest / HEARING_RANGE)
 
     def _spawn_creature(self, rng, max_attempts=100):
         jitter_x = self.width * 0.15
@@ -622,6 +680,7 @@ class World:
             creature.y = y
             creature.heading = random.uniform(-math.pi, math.pi)
             self.seek.target = None
+            creature.hearing = self.hearing_proximity()
             creature.sense(self.sense_obstacles())
             return
 
@@ -650,6 +709,7 @@ class World:
         creature.step(dt, forward, turn, self.walls, self.boxes)
         self._eat()
         self._hunt(dt)
+        creature.hearing = self.hearing_proximity()
         creature.sense(self.sense_obstacles())
 
     def to_dict(self):

@@ -177,9 +177,24 @@ canvas#anomaly-spark {
   transition: width 0.1s linear;
 }
 
-#touch-indicator span.on {
+#touch-indicator span.on,
+#pain-indicator span.on {
   color: #e74c3c;
   font-weight: bold;
+}
+
+#danger-bar {
+  height: 100%;
+  width: 0%;
+  background: #e74c3c;
+  transition: width 0.15s linear;
+}
+
+#hearing-bar {
+  height: 100%;
+  width: 0%;
+  background: #9b59b6;
+  transition: width 0.1s linear;
 }
 
 #proprio {

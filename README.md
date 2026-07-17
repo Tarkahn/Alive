@@ -20,14 +20,21 @@ See `ROADMAP.md` for where this is headed.
   an energy drive: energy drains with time and movement, hunger weakens the
   body, eating restores it, and the energy level is sensed as interoception.
   A predator hunts the creature (straight-line pursuit, same wall collision
-  as everything else); a bite drains energy and starts a cooldown, so
-  actually evading it matters.
+  as everything else); a bite drains energy, fires a lingering pain sense,
+  and sates the predator — it retreats to its den until hunger returns, so
+  life alternates between quiet stretches and hunts. The creature also
+  *hears*: an omnidirectional footsteps-loudness sense that carries through
+  walls, since a pursuer usually approaches from behind where vision can't
+  reach.
 - **Brain** (`backend/brain/`): sensory encoders → SDRs → Spatial Pooler →
   Temporal Memory (htm.core). Outputs: an anomaly score per tick — how
   *surprised* the creature is by what it senses (familiar places become
-  boring; new rooms spike surprise) — and a **room belief**: an SDR
-  classifier reads the Temporal Memory's active cells and estimates which
-  room the creature is in, from senses alone. Brain state is saved to
+  boring; new rooms spike surprise) — a **room belief**: an SDR classifier
+  reads the Temporal Memory's active cells and estimates which room the
+  creature is in, from senses alone — and **danger**: a second classifier
+  predicts whether the pain sense will fire in the next 0.5–1.5s, so the
+  meter rises as it hears the predator approach — learned fear, anticipating
+  harm instead of merely reacting to it. Brain state is saved to
   `brain_state/` periodically so learning survives restarts.
 - **Server** (`backend/main.py`): FastAPI; steps the world and brain at 30Hz,
   streams state over a WebSocket.

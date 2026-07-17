@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Alive</title>
-  <link rel="stylesheet" href="/static/style.css?v=4" />
+  <link rel="stylesheet" href="/static/style.css?v=5" />
 </head>
 <body>
   <h1>Alive</h1>
@@ -21,6 +21,8 @@
         <div class="meter-label">surprise <span id="anomaly-value">–</span></div>
         <div class="meter"><div id="anomaly-bar"></div></div>
         <canvas id="anomaly-spark" width="220" height="40"></canvas>
+        <div class="meter-label">danger (predicted pain) <span id="danger-value">–</span></div>
+        <div class="meter"><div id="danger-bar"></div></div>
       </div>
       <div class="panel-section">
         <h2>Location</h2>
@@ -33,6 +35,9 @@
         <div class="meter-label">vision (left → right)</div>
         <div id="vision-bars"></div>
         <div id="touch-indicator">touch: <span>no</span></div>
+        <div id="pain-indicator">pain: <span>no</span></div>
+        <div class="meter-label">hearing (footsteps) <span id="hearing-value">–</span></div>
+        <div class="meter"><div id="hearing-bar"></div></div>
         <div class="meter-label">energy <span id="energy-value">–</span></div>
         <div class="meter"><div id="energy-bar"></div></div>
         <div id="proprio"></div>
@@ -40,6 +45,6 @@
     </aside>
   </div>
   <p id="status">connecting...</p>
-  <script src="/static/main.js?v=5"></script>
+  <script src="/static/main.js?v=6"></script>
 </body>
 </html>
