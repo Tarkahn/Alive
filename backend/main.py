@@ -73,7 +73,10 @@ async def simulation_loop():
     dt = 1 / TICK_RATE_HZ
     while True:
         await asyncio.sleep(dt)
-        world.step(dt)
+        # Curiosity signal is last tick's smoothed anomaly - the brain can
+        # only ever act on what it already perceived, never the future.
+        curiosity = cortex.anomaly_avg if cortex else None
+        world.step(dt, curiosity)
         if cortex:
             cortex.step(world.creatures[0], world.creature_room())
         if not connections:
