@@ -84,6 +84,7 @@ canvas#anomaly-spark {
   background: #12141c;
   border-radius: 3px;
   width: 100%;
+  height: 40px;
 }
 
 #room-bars {
@@ -205,4 +206,74 @@ canvas#anomaly-spark {
 #status {
   font-size: 0.85rem;
   color: #888;
+}
+
+/* Narrow / docked windows: side-by-side doesn't fit, so the toggles become a
+   slim bar above the canvas and the rest of the panel becomes a tightly
+   wrapped card directly below it - nothing far off-screen to scroll for. */
+@media (max-width: 820px) {
+  body {
+    padding: 0.6rem;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+  }
+
+  #layout {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  canvas#world {
+    width: 100%;
+    height: auto;
+  }
+
+  /* #panel itself generates no box here - its .panel-section children become
+     direct flex items of #layout, so `order` can place them independently
+     of their position in the markup. */
+  #panel {
+    display: contents;
+  }
+
+  #toggles {
+    order: -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 1rem;
+    margin-bottom: 0;
+    padding: 0.5rem 0.6rem;
+    background: #171a24;
+    border: 1px solid #333a4d;
+    border-radius: 4px;
+  }
+
+  #toggles label {
+    margin-bottom: 0;
+  }
+
+  /* :not(#toggles) - #toggles is also a .panel-section inside #panel, and
+     without the exclusion this selector's higher specificity would overrule
+     #toggles's own order:-1 above, undoing the "toggles bar goes first" fix. */
+  #panel .panel-section:not(#toggles) {
+    order: 1;
+    background: #171a24;
+    border: 1px solid #333a4d;
+    border-radius: 4px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  #panel .panel-section:not(#toggles):last-child {
+    margin-bottom: 0;
+  }
+
+  #status {
+    margin: 0.4rem 0 0;
+  }
 }
