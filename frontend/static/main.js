@@ -13,8 +13,13 @@ const visionBarsEl = document.getElementById("vision-bars");
 const roomBarsEl = document.getElementById("room-bars");
 const kidnapBtn = document.getElementById("kidnap-btn");
 const touchEl = document.querySelector("#touch-indicator span");
+const painEl = document.querySelector("#pain-indicator span");
 const energyValueEl = document.getElementById("energy-value");
 const energyBarEl = document.getElementById("energy-bar");
+const dangerValueEl = document.getElementById("danger-value");
+const dangerBarEl = document.getElementById("danger-bar");
+const hearingValueEl = document.getElementById("hearing-value");
+const hearingBarEl = document.getElementById("hearing-bar");
 const proprioEl = document.getElementById("proprio");
 
 let socket = null;
@@ -123,8 +128,9 @@ function render(world) {
 }
 
 function drawPredator(predator) {
-  ctx.fillStyle = "#c0392b";
-  ctx.strokeStyle = "#e74c3c";
+  const hunting = predator.state !== "satiated";
+  ctx.fillStyle = hunting ? "#c0392b" : "rgba(192, 57, 43, 0.35)";
+  ctx.strokeStyle = hunting ? "#e74c3c" : "rgba(231, 76, 60, 0.5)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(predator.x, predator.y, predator.radius, 0, Math.PI * 2);
@@ -213,6 +219,14 @@ function updatePanel(world) {
     energyBarEl.style.width = `${Math.round(energy * 100)}%`;
   }
 
+  const pain = senses.interoception ? senses.interoception.pain : 0;
+  painEl.textContent = pain > 0.1 ? "YES" : "no";
+  painEl.className = pain > 0.1 ? "on" : "";
+
+  const hearing = senses.hearing || 0;
+  hearingValueEl.textContent = hearing.toFixed(2);
+  hearingBarEl.style.width = `${Math.round(hearing * 100)}%`;
+
   const p = senses.proprioception;
   proprioEl.textContent =
     `speed: ${p.speed}\n` +
@@ -231,11 +245,16 @@ function updatePanel(world) {
     anomalyHistory.push(brain.anomaly);
     if (anomalyHistory.length > SPARK_POINTS) anomalyHistory.shift();
     drawSparkline();
+    const danger = brain.danger || 0;
+    dangerValueEl.textContent = danger.toFixed(3);
+    dangerBarEl.style.width = `${Math.round(danger * 100)}%`;
   } else {
     brainStatusEl.textContent = "offline — brain runs in local dev (see README)";
     brainStatusEl.className = "";
     anomalyValueEl.textContent = "–";
     anomalyBarEl.style.width = "0%";
+    dangerValueEl.textContent = "–";
+    dangerBarEl.style.width = "0%";
     drawOfflineSparkline();
   }
 

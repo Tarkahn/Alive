@@ -5,7 +5,9 @@ Channels:
 - heading                                -> periodic scalar encoder
 - touch                                  -> scalar encoder (2 buckets)
 - motor efference copy (speed, turn)     -> RDSE each
+- hearing (predator footstep loudness)   -> RDSE
 - interoception: energy (hunger)         -> RDSE
+- nociception: pain                      -> scalar encoder
 """
 
 import math
@@ -27,6 +29,10 @@ MOTOR_SIZE = 500
 MOTOR_ACTIVE = 25
 ENERGY_SIZE = 500
 ENERGY_ACTIVE = 25
+PAIN_SIZE = 100
+PAIN_ACTIVE = 13
+HEARING_SIZE = 500
+HEARING_ACTIVE = 25
 
 
 def _rdse(size, active, resolution, seed):
@@ -64,8 +70,23 @@ class SensoryEncoder:
         self.turn_encoder = _rdse(MOTOR_SIZE, MOTOR_ACTIVE, resolution=MAX_TURN_RATE / 10, seed=201)
         self.energy_encoder = _rdse(ENERGY_SIZE, ENERGY_ACTIVE, resolution=0.05, seed=202)
 
+        pain_params = ScalarEncoderParameters()
+        pain_params.minimum = 0
+        pain_params.maximum = 1
+        pain_params.size = PAIN_SIZE
+        pain_params.activeBits = PAIN_ACTIVE
+        self.pain_encoder = ScalarEncoder(pain_params)
+
+        self.hearing_encoder = _rdse(HEARING_SIZE, HEARING_ACTIVE, resolution=0.05, seed=203)
+
         self.size = (
-            RAY_SIZE * NUM_VISION_RAYS + HEADING_SIZE + TOUCH_SIZE + MOTOR_SIZE * 2 + ENERGY_SIZE
+            RAY_SIZE * NUM_VISION_RAYS
+            + HEADING_SIZE
+            + TOUCH_SIZE
+            + MOTOR_SIZE * 2
+            + ENERGY_SIZE
+            + PAIN_SIZE
+            + HEARING_SIZE
         )
 
     def encode(self, senses):
@@ -80,6 +101,8 @@ class SensoryEncoder:
         parts.append(self.speed_encoder.encode(proprio["speed"]))
         parts.append(self.turn_encoder.encode(proprio["turn_rate"]))
         parts.append(self.energy_encoder.encode(senses["interoception"]["energy"]))
+        parts.append(self.pain_encoder.encode(senses["interoception"]["pain"]))
+        parts.append(self.hearing_encoder.encode(senses["hearing"]))
 
         combined = SDR(self.size)
         combined.concatenate(parts)

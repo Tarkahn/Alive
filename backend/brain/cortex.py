@@ -8,6 +8,10 @@ Outputs:
   I see?" The classifier is a readout, not a control signal: the brain still
   never receives coordinates, only a room label to associate with its own
   internal state during learning.
+- danger: a second classifier trained with a future-step horizon on the pain
+  sense - "given what I perceive right now, will it hurt soon?" When this
+  rises before a predator makes contact, the creature has learned to
+  anticipate harm rather than merely react to it.
 """
 
 import json
@@ -24,6 +28,8 @@ COLUMNS = 1024
 CELLS_PER_COLUMN = 8
 ANOMALY_EMA_ALPHA = 0.02  # smoothing for the running average
 PREDICTOR_ALPHA = 0.08
+DANGER_STEPS = [15, 30, 45]  # horizons: predict pain 0.5-1.5s ahead (at 30Hz)
+DANGER_PAIN_THRESHOLD = 0.1  # the pain level that counts as "it hurts"
 SAVE_INTERVAL_SECONDS = 60
 
 STATE_DIR = Path(
@@ -42,6 +48,10 @@ class Cortex:
         self.classifier = Predictor(steps=[0], alpha=PREDICTOR_ALPHA) if num_rooms > 0 else None
         self.classifier_samples = 0
         self.room_belief = [0.0] * num_rooms
+
+        self.danger_classifier = Predictor(steps=DANGER_STEPS, alpha=PREDICTOR_ALPHA)
+        self.danger_samples = 0
+        self.danger = 0.0
 
         self.anomaly = 1.0
         self.anomaly_avg = 1.0
@@ -85,6 +95,7 @@ class Cortex:
 
         if self.classifier is not None:
             self._update_room_belief(room, learn)
+        self._update_danger(senses["interoception"]["pain"], learn)
 
         if learn and time.monotonic() - self._last_save > SAVE_INTERVAL_SECONDS:
             self.save_state()
@@ -106,6 +117,28 @@ class Cortex:
         except Exception:
             pass
 
+    def _update_danger(self, pain, learn):
+        """Danger readout: predict whether the pain sense will be firing
+        0.5-1.5s from now, given the TM's current active cells. The
+        classifier's step horizons do the temporal credit assignment: they
+        associate what the brain perceived *before* each bite with the pain
+        that followed. Danger is the worst case across horizons. Best-effort,
+        like the room readout."""
+        active_cells = self.tm.getActiveCells()
+        label = 1 if pain > DANGER_PAIN_THRESHOLD else 0
+        try:
+            if learn:
+                self.danger_classifier.learn(self.ticks, active_cells, label)
+                self.danger_samples += 1
+            if self.danger_samples > max(DANGER_STEPS):
+                predictions = self.danger_classifier.infer(active_cells)
+                self.danger = max(
+                    (float(pdf[1]) for pdf in predictions.values() if len(pdf) > 1),
+                    default=0.0,
+                )
+        except Exception:
+            pass
+
     def state_dict(self):
         return {
             "available": True,
@@ -113,6 +146,7 @@ class Cortex:
             "anomaly_avg": round(self.anomaly_avg, 4),
             "ticks": self.ticks,
             "room_belief": [round(p, 4) for p in self.room_belief],
+            "danger": round(self.danger, 4),
         }
 
     def save_state(self):
@@ -122,12 +156,14 @@ class Cortex:
             self.tm.saveToFile(str(STATE_DIR / "tm.bin"))
             if self.classifier is not None:
                 self.classifier.saveToFile(str(STATE_DIR / "predictor.bin"))
+            self.danger_classifier.saveToFile(str(STATE_DIR / "danger.bin"))
             # Predictor.learn requires a monotonically increasing recordNum,
             # so ticks must survive restarts alongside it.
             meta = {
                 "ticks": self.ticks,
                 "num_rooms": self.num_rooms,
                 "classifier_samples": self.classifier_samples,
+                "danger_samples": self.danger_samples,
             }
             (STATE_DIR / "meta.json").write_text(json.dumps(meta))
             self._last_save = time.monotonic()
@@ -150,15 +186,32 @@ class Cortex:
                 self.tm = self._build_tm()
 
         meta_path = STATE_DIR / "meta.json"
-        predictor_path = STATE_DIR / "predictor.bin"
-        if self.classifier is None or not (meta_path.exists() and predictor_path.exists()):
+        if not meta_path.exists():
             return
         try:
             meta = json.loads(meta_path.read_text())
-            if meta.get("num_rooms") != self.num_rooms:
-                return  # different floor plan; the saved room labels are meaningless
-            self.classifier.loadFromFile(str(predictor_path))
-            self.ticks = int(meta.get("ticks", 0))
-            self.classifier_samples = int(meta.get("classifier_samples", 0))
         except Exception:
-            pass
+            return
+        # Restoring ticks keeps Predictor recordNums monotonically increasing
+        # across restarts for both classifiers.
+        self.ticks = int(meta.get("ticks", 0))
+
+        predictor_path = STATE_DIR / "predictor.bin"
+        if (
+            self.classifier is not None
+            and predictor_path.exists()
+            and meta.get("num_rooms") == self.num_rooms  # else labels are meaningless
+        ):
+            try:
+                self.classifier.loadFromFile(str(predictor_path))
+                self.classifier_samples = int(meta.get("classifier_samples", 0))
+            except Exception:
+                pass
+
+        danger_path = STATE_DIR / "danger.bin"
+        if danger_path.exists():
+            try:
+                self.danger_classifier.loadFromFile(str(danger_path))
+                self.danger_samples = int(meta.get("danger_samples", 0))
+            except Exception:
+                pass
